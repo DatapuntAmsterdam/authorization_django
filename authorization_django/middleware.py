@@ -210,6 +210,16 @@ def authorization_middleware(get_response):
             request.get_token_subject = None
             return get_response(request)
 
+        PROTECTED = middleware_settings['PROTECTED']
+        protected_resource = None
+        for resource in PROTECTED:
+            (route, protected_methods, required_scopes) = resource
+            if request.path.startswith(route) and \
+                    method_is_protected(request.method, protected_methods):
+                protected_resource = resource
+        if not protected_resource:
+            return get_response(request)
+
         # Standard case
         scopes = []
         token_signature = ''
@@ -231,13 +241,9 @@ def authorization_middleware(get_response):
         if len(min_scope) > 0 and not authz_func(*min_scope):
             return insufficient_scope()
 
-        PROTECTED = middleware_settings['PROTECTED']
-        for resource in PROTECTED:
-            (route, protected_methods, required_scopes) = resource
-            if request.path.startswith(route) and \
-                method_is_protected(request.method, protected_methods) and \
-                not authz_func(*required_scopes):
-                return insufficient_scope()
+        (route, protected_methods, required_scopes) = protected_resource
+        if not authz_func(*required_scopes):
+            return insufficient_scope()
 
         request.is_authorized_for = authz_func
         request.get_token_subject = subject
